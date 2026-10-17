@@ -140,7 +140,7 @@ app.use(
     visitorRoutes
 );
 
-app.use("/api/java-resources", javaResourcesRoutes);
+app.use("/java-resources", javaResourcesRoutes);
 
 // ===============================
 // RESUME
