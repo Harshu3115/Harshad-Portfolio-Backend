@@ -17,6 +17,7 @@ const experienceRoutes = require("./routes/experienceRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const visitorRoutes = require("./routes/visitorRoutes");
+const javaResourcesRoutes = require("./routes/javaResourcesRoutes");
 
 // ===============================
 // DEBUG ROUTES
@@ -138,6 +139,8 @@ app.use(
     "/api/visitors",
     visitorRoutes
 );
+
+app.use("/api/java-resources", javaResourcesRoutes);
 
 // ===============================
 // RESUME
