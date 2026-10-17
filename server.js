@@ -42,12 +42,25 @@ const app = express();
 // MIDDLEWARE
 // ===============================
 
+
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://harshad-shinde-portfolio.onrender.com",
+];
+
 app.use(
     cors({
-        origin: process.env.FRONTEND_URL,
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+
+            return callback(new Error("Not allowed by CORS"));
+        },
         credentials: true,
     })
 );
+
 
 app.use(express.json());
 
