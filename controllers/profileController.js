@@ -1,6 +1,7 @@
 const profileModel = require("../models/profileModel");
 const fs = require("fs");
 const path = require("path");
+const cloudinary = require("../config/cloudinary");
 
 // =====================================
 // GET PROFILE
@@ -96,67 +97,79 @@ const updateProfile = async (req, res) => {
 // =====================================
 
 const uploadResume = async (req, res) => {
-
     try {
-
         // ---------------------------------
         // 1. Check new file
         // ---------------------------------
-
         if (!req.file) {
-
             return res.status(400).json({
                 success: false,
                 message: "Please select a PDF resume"
             });
-
         }
-
 
         // ---------------------------------
         // 2. Get current profile
         // ---------------------------------
-
-        const oldProfile =
-            await profileModel.getProfile();
-
+        const oldProfile = await profileModel.getProfile();
 
         if (!oldProfile) {
-
-            // Delete newly uploaded file
-            fs.unlinkSync(req.file.path);
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
 
             return res.status(404).json({
                 success: false,
                 message: "Profile not found"
             });
-
         }
 
-
         // ---------------------------------
-        // 3. Save new resume URL
+        // 3. Upload PDF to Cloudinary
         // ---------------------------------
+        const result = await cloudinary.uploader.upload(
+            req.file.path,
+            {
+                folder: "harshad-portfolio/resumes",
+                resource_type: "raw"
+            }
+        );
 
-        const newResumeUrl =
-            `/resume/${req.file.filename}`;
+        // Cloudinary gives us permanent HTTPS URL
+        const newResumeUrl = result.secure_url.replace(
+            /^https\/\//,
+            "https://"
+        );
 
+        console.log("Resume uploaded to Cloudinary:");
+        console.log(newResumeUrl);
 
         // ---------------------------------
         // 4. Update database
         // ---------------------------------
-
-        const result =
+        const dbResult =
             await profileModel.updateResumeUrl(
                 newResumeUrl
             );
 
+        if (dbResult.affectedRows === 0) {
 
-        if (result.affectedRows === 0) {
+            // Delete uploaded Cloudinary file
+            try {
+                await cloudinary.uploader.destroy(
+                    result.public_id,
+                    {
+                        resource_type: "raw"
+                    }
+                );
+            } catch (deleteError) {
+                console.error(
+                    "Failed to delete Cloudinary resume:",
+                    deleteError
+                );
+            }
 
-            // DB update failed
-            // Delete new file
-
+            // Delete temporary local file
             if (fs.existsSync(req.file.path)) {
                 fs.unlinkSync(req.file.path);
             }
@@ -165,64 +178,25 @@ const uploadResume = async (req, res) => {
                 success: false,
                 message: "Failed to update resume"
             });
-
         }
 
-
         // ---------------------------------
-        // 5. Delete OLD resume
+        // 5. Delete temporary local file
         // ---------------------------------
-
-        if (oldProfile.resume_url) {
-
-            const oldFileName =
-                path.basename(
-                    oldProfile.resume_url
-                );
-
-            const oldFilePath =
-                path.join(
-                    __dirname,
-                    "../uploads/resume",
-                    oldFileName
-                );
-
-
-            // Don't delete the new file
-            if (
-                oldFileName !== req.file.filename &&
-                fs.existsSync(oldFilePath)
-            ) {
-
-                fs.unlinkSync(oldFilePath);
-
-                console.log(
-                    "Old resume deleted:",
-                    oldFileName
-                );
-
-            }
-
+        if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
         }
-
 
         // ---------------------------------
         // 6. Success response
         // ---------------------------------
-
         res.status(200).json({
-
             success: true,
-
-            message:
-                "New resume uploaded successfully",
-
+            message: "New resume uploaded successfully",
             data: {
                 resume_url: newResumeUrl
             }
-
         });
-
 
     } catch (error) {
 
@@ -231,43 +205,29 @@ const uploadResume = async (req, res) => {
             error
         );
 
-
-        // If something failed and the new file
-        // exists, remove it.
-
+        // Delete temporary uploaded file
         if (
             req.file &&
             req.file.path &&
             fs.existsSync(req.file.path)
         ) {
-
             try {
-
                 fs.unlinkSync(req.file.path);
-
             } catch (deleteError) {
-
                 console.error(
-                    "Failed to remove new resume:",
+                    "Failed to remove temporary resume:",
                     deleteError
                 );
-
             }
-
         }
 
-
         res.status(500).json({
-
             success: false,
-
             message:
+                error.message ||
                 "Failed to upload new resume"
-
         });
-
     }
-
 };
 
 // =====================================
